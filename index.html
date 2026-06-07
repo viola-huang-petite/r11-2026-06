@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>值班問題回報與查詢系統</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background-color: #f9f9f9; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h2 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 5px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], select, textarea { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background-color: #0056b3; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #007bff; color: white; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+
+    <h1>📋 值班問題管理系統</h1>
+
+    <div class="card">
+        <h2>填寫值班回報</h2>
+        <form id="reportForm">
+            <div class="form-group">
+                <label for="user">值班人員：</label>
+                <input type="text" id="user" required placeholder="請輸入姓名">
+            </div>
+            <div class="form-group">
+                <label for="category">問題分類：</label>
+                <select id="category" required>
+                    <option value="">--請選擇--</option>
+                    <option value="設備故障">設備故障</option>
+                    <option value="環境清潔">環境清潔</option>
+                    <option value="安全事件">安全事件</option>
+                    <option value="顧客投訴">顧客投訴</option>
+                    <option value="其他">其他</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="description">問題描述：</label>
+                <textarea id="description" rows="4" required placeholder="請詳細說明問題狀況..."></textarea>
+            </div>
+            <button type="submit">送出報表</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>查詢歷史紀錄</h2>
+        <div class="form-group" style="display: flex; gap: 10px;">
+            <input type="text" id="searchUser" placeholder="輸入人員姓名關鍵字 (留空則查詢全部)">
+            <button type="button" onclick="queryData()">搜尋</button>
+        </div>
+        
+        <table id="resultTable" style="display: none;">
+            <thead>
+                <tr>
+                    <th>時間</th>
+                    <th>值班人員</th>
+                    <th>分類</th>
+                    <th>描述</th>
+                    <th>狀態</th>
+                </tr>
+            </thead>
+            <tbody id="resultBody">
+                </tbody>
+        </table>
+        <p id="noDataText" style="display: none; color: #666;">查無相關紀錄。</p>
+    </div>
+
+    <script>
+        // ⚠️ 請在此處替換成你部署好的 Google Apps Script 網頁應用程式 URL
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxQKfoK2EkL_v5UJkc7FjRpXSHO8oLI3PZA0tNzCXiMd3Ra3aV9OEYkaYpfOxzSXHhvAg/exec";
+
+        // 處理表單送出
+        document.getElementById('reportForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const user = document.getElementById('user').value;
+            const category = document.getElementById('category').value;
+            const description = document.getElementById('description').value;
+
+            // 使用 FormData 封裝數據
+            const url = `${GAS_WEB_APP_URL}?action=submit&user=${encodeURIComponent(user)}&category=${encodeURIComponent(category)}&description=${encodeURIComponent(description)}`;
+
+            alert("資料傳送中，請稍候...");
+
+            fetch(url, { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if(data.result === 'success') {
+                    alert('🎉 回報成功！資料已寫入資料庫。');
+                    document.getElementById('reportForm').reset();
+                } else {
+                    alert('回報失敗，請檢查設定。');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('連線發生錯誤，請確認 GAS 部署權限是否為「所有人」。');
+            });
+        });
+
+        // 處理資料查詢
+        function queryData() {
+            const searchUser = document.getElementById('searchUser').value;
+            const url = `${GAS_WEB_APP_URL}?action=query&user=${encodeURIComponent(searchUser)}`;
+
+            fetch(url, { method: 'GET' })
+            .then(response => response.json())
+            .then(data => {
+                const tbody = document.getElementById('resultBody');
+                const table = document.getElementById('resultTable');
+                const noDataText = document.getElementById('noDataText');
+                
+                tbody.innerHTML = ''; // 清空舊資料
+                
+                if (data.length === 0) {
+                    table.style.display = 'none';
+                    noDataText.style.display = 'block';
+                    return;
+                }
+
+                data.forEach(item => {
+                    const row = `<tr>
+                        <td>${item.timestamp}</td>
+                        <td>${item.user}</td>
+                        <td>${item.category}</td>
+                        <td>${item.description}</td>
+                        <td><strong>${item.status}</strong></td>
+                    </tr>`;
+                    tbody.innerHTML += row;
+                });
+
+                table.style.display = 'table';
+                noDataText.style.display = 'none';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('查詢失敗，請稍後再試。');
+            });
+        }
+    </script>
+</body>
+</html>
